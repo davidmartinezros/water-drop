@@ -1,6 +1,7 @@
 import {Component, ViewChild, ElementRef, OnInit, AfterViewInit} from '@angular/core';
 import THREE from './js/three';
 var Physijs = require('physijs-webpack');
+var TWEEN = require('three-tween');
 
 @Component({
     selector: 'app-root',
@@ -36,10 +37,31 @@ export class AppComponent implements OnInit, AfterViewInit {
 // FUNCTIONS
 constructor() {
 
+    //TWEEN.start();
+
     this.defineLoadTextures();
 
 	// SCENE
-    this.scene = new THREE.Scene();
+    //this.scene = new THREE.Scene();
+
+    debugger;
+
+    this.scene = new Physijs.Scene({ fixedTimeStep: 1 / 120 });
+    this.scene.setGravity(new THREE.Vector3( 0, -30, 0 ));
+    var sceneTmp = this.scene;
+    this.scene.addEventListener(
+        'update',
+        function() {
+            if ( this.waterDrop ) {
+                //this.waterDrop.setSteering( input.steering, 0 );
+                //this.waterDrop.setSteering( input.steering, 1 );
+                this.waterDrop.applyEngineForce( 300 );
+                //this.waterDrop.setBrake( 20, 2 );
+                //this.waterDrop.setBrake( 20, 3 );
+            }
+            sceneTmp.simulate( undefined, 2 );
+        }
+    );
     
     // CAMERA
 	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
@@ -75,6 +97,8 @@ constructor() {
 	// CUSTOM //
 	////////////
     //this.defineShaderPlanes();
+
+    this.scene.simulate();
 }
 
 defineLoadTextures() {
@@ -123,14 +147,15 @@ defineFloor() {
         .8, // high friction
         .4 // low restitution
     );
+    /*
 	var floorGeometry = new THREE.PlaneGeometry(1000, 1000, 10, 10);
     var floor = new THREE.Mesh(floorGeometry, floorMaterial);
 	floor.position.y = -0.5;
     floor.rotation.x = Math.PI / 2;
-    
+    */
     // Ground
-    floor = new Physijs.BoxMesh(
-        new THREE.BoxGeometry(50, 1, 50),
+    var floor = new Physijs.BoxMesh(
+        new THREE.BoxGeometry(1000, 1, 1000),
         //new THREE.PlaneGeometry(50, 50),
         floorMaterial,
         0 // mass
@@ -211,6 +236,27 @@ defineShaderPlanes() {
 physics;
 
 defineWater() {
+
+    // Materials
+    var ground_material = Physijs.createMaterial(
+        new THREE.MeshLambertMaterial({ map: this.loaderTextures.load( 'assets/textures/water.jpg' ) }),
+        .8, // high friction
+        .4 // low restitution
+    );
+    ground_material.map.wrapS = ground_material.map.wrapT = THREE.RepeatWrapping;
+    ground_material.map.repeat.set( 2.5, 2.5 );
+
+    // Bumpers
+    var bumper,
+    bumper_geom = new THREE.BoxGeometry(2, 1, 50);
+
+    bumper = new Physijs.BoxMesh( bumper_geom, ground_material, 0, { restitution: .2 } );
+    bumper.position.y = 1;
+    bumper.position.x = -24;
+    bumper.receiveShadow = true;
+    bumper.castShadow = true;
+    this.scene.add( bumper );
+
     var noiseTexture = this.loaderTextures.load( 'assets/textures/cloud.png' );
 	noiseTexture.wrapS = noiseTexture.wrapT = THREE.RepeatWrapping; 
 	
@@ -239,14 +285,28 @@ defineWater() {
 	customMaterial2.side = THREE.DoubleSide;
 	customMaterial2.transparent = true;
 	
-	// apply the material to a surface
+    // apply the material to a surface
+
+
 	var flatGeometry = new THREE.SphereGeometry( 30, 30, 30 );
-    var surface = new THREE.Mesh( flatGeometry, customMaterial2 );
-    surface.position.set(60,50,150);
+    //var surface = new THREE.Mesh( flatGeometry, customMaterial2 );
+
+    this.waterDrop = new Physijs.SphereMesh(
+        flatGeometry,
+        customMaterial2,
+        undefined,
+        { restitution: Math.random() * 1.5 }
+    );
+
+    this.waterDrop.position.set(60,50,150);
+    this.waterDrop.receiveShadow = true;
+    this.waterDrop.castShadow = true;
 
     //this.physics = new THREE.MMDPhysics( surface );
 
-    this.scene.add( surface );
+    new TWEEN.Tween(this.waterDrop.material).to({opacity: 1}, 500).start();
+
+    this.scene.add( this.waterDrop );
 }
 
 defineOndulateMesh() {
@@ -299,7 +359,10 @@ update()
 		// do something
     }
     */
-	var delta = this.clock.getDelta();
+    var delta = this.clock.getDelta();
+    
+    TWEEN.update( delta );
+
 	//this.customUniforms.time.value += delta;
 	this.customUniforms2.time.value += delta;
 	this.controls.update();
